@@ -264,114 +264,114 @@ public class Stage extends Scene {
         objs.addAll(Enemies.getEnemies());
         
         for (Objs.Obj obj : objs) {
-            if (obj.isDrawable()) {
+            if (!obj.isDrawable()) continue;
                 
-                double objX = obj.getCol() + 0.5;
-                double objY = obj.getRow() + 0.5;
-                
-                if (obj.getType() == ENEMY) {
-                    EnemyObj enemy = (EnemyObj) obj;
-                    objX = enemy.getEnemyX();
-                    objY = enemy.getEnemyY();
-                }
-                else if (obj.getType() == END_PLAYER) {
-                    EndPlayerObj epObj = (EndPlayerObj) obj;
-                    objX = epObj.getEndPlayerX();
-                    objY = epObj.getEndPlayerY();
-                }
-                
-                double distX = objX - Player.getPlayerX();
-                double distY = objY - Player.getPlayerY();
-                
-                double distHor = dirHorX * distX + dirHorY * distY;
-                double distVer = dirVerX * distX + dirVerY * distY;
-                
-                if (distHor > PLAYER_RADIUS) {
-                    int sizeHor = (int) (projPlaneDistance * 1 / distHor);
-                    int sizeVer = (int) (projPlaneDistance * distVer / distHor);
+            double objX = obj.getCol() + 0.5;
+            double objY = obj.getRow() + 0.5;
 
-                    obj.setSizeHor(sizeHor);
-                    obj.setSizeVer(sizeVer);
-                    obj.setDistanceFromPlayer(distHor);
-                    orderedObjs.add(obj);
+            if (obj.getType() == ENEMY) {
+                EnemyObj enemy = (EnemyObj) obj;
+                objX = enemy.getEnemyX();
+                objY = enemy.getEnemyY();
+            }
+            else if (obj.getType() == END_PLAYER) {
+                EndPlayerObj epObj = (EndPlayerObj) obj;
+                objX = epObj.getEndPlayerX();
+                objY = epObj.getEndPlayerY();
+            }
+
+            double distX = objX - Player.getPlayerX();
+            double distY = objY - Player.getPlayerY();
+
+            double distHor = dirHorX * distX + dirHorY * distY;
+            double distVer = dirVerX * distX + dirVerY * distY;
+
+            if (distHor > PLAYER_RADIUS) {
+                int sizeHor = (int) (projPlaneDistance * 1 / distHor);
+                int sizeVer = (int) (projPlaneDistance * distVer / distHor);
+
+                obj.setSizeHor(sizeHor);
+                obj.setSizeVer(sizeVer);
+                obj.setDistanceFromPlayer(distHor);
+                orderedObjs.add(obj);
+            }
+        }
+        
+        Collections.sort(orderedObjs, objComparator);
+        for (Objs.Obj obj2 : orderedObjs) {
+            int sizeHor = obj2.getSizeHor();
+            int sizeVer = obj2.getSizeVer();
+            if (sizeHor <= 0) return;
+
+            // calculate the clipping region of sprite
+            boolean clip = true;
+            int startClip = -1;
+            int endClip = 0;
+            //double tol = 0.1; // tolerance to avoid visibility problems
+            for (int x = 0; x < sizeHor; x++) {
+                int scrX = 160 - sizeHor / 2 + sizeVer + x;
+
+                boolean draw = scrX >= 0 && scrX < CANVAS_WIDTH 
+                        && wallDepth[scrX] > obj2.getDistanceFromPlayer() 
+                                        / Math.cos(projectionAngles[scrX]); // + tol;
+
+                if (clip && draw) {
+                    startClip = scrX;
+                    clip = false;
+                }
+                else if (!clip && (!draw || x == sizeHor - 1)) {
+                    endClip = scrX;
+                    break;
                 }
             }
-            Collections.sort(orderedObjs, objComparator);
-            for (Objs.Obj obj2 : orderedObjs) {
-                int sizeHor = obj2.getSizeHor();
-                int sizeVer = obj2.getSizeVer();
-                if (sizeHor <= 0) return;
 
-                // calculate the clipping region of sprite
-                boolean clip = true;
-                int startClip = -1;
-                int endClip = 0;
-                //double tol = 0.1; // tolerance to avoid visibility problems
-                for (int x = 0; x < sizeHor; x++) {
-                    int scrX = 160 - sizeHor / 2 + sizeVer + x;
-                    
-                    boolean draw = scrX >= 0 && scrX < CANVAS_WIDTH 
-                            && wallDepth[scrX] > obj2.getDistanceFromPlayer() 
-                                            / Math.cos(projectionAngles[scrX]); // + tol;
+            // sprite completely occluded
+            if (startClip < 0) {
+                continue;
+            }
 
-                    if (clip && draw) {
-                        startClip = scrX;
-                        clip = false;
-                    }
-                    else if (!clip && (!draw || x == sizeHor - 1)) {
-                        endClip = scrX;
-                        break;
-                    }
-                }
-                
-                // sprite completely occluded
-                if (startClip < 0) {
-                    continue;
-                }
-                
-                // draw sprite
-                int dx1 = offsetX + 160 - sizeHor / 2 + sizeVer;
-                int dy1 = offsety - sizeHor / 2;
-                int dx2 = dx1 + sizeHor;
-                int dy2 = dy1 + sizeHor;
-                int sx1 = 0;
-                int sy1 = 0;
-                int sx2 = 64;
-                int sy2 = 64;
-                Shape oc = g.getClip();
-                g.setClip(
-                        startClip, 0, endClip - startClip, CANVAS_HEIGHT - 40);
-                
-                g.drawImage(obj2.getSprite()
-                        , dx1, dy1, dx2, dy2, sx1, sy1, sx2, sy2, null);
-                
-                g.setClip(oc);
-                
-                // reuse this drawing routine 
-                // to choose the closest enemy in sight
-                int terX = offsetX + 160 - sizeHor / 4 + sizeVer;
-                int terY = dy1;
-                int terW = sizeHor / 2;
-                int terH = dy2 - dy1;
-                targetEnemyRegionTmp.setBounds(terX, terY, terW, terH);
-                EnemyObj closestEnemy = Wolf3DGame.getClosestEnemyInSight();
-                if (obj2.getType() == ENEMY) { 
-                    Objs.EnemyObj enemyObj = (Objs.EnemyObj) obj2;
-                    if (enemyObj.getEnemyState() != DEAD && 
-                        ((closestEnemy == null 
-                            || enemyObj.getDistanceFromPlayer() 
-                            < closestEnemy.getDistanceFromPlayer()) 
-                                && sight.intersects(dx1, 0, dx2 - dx1, 200) 
-                                    && targetEnemyRegionTmp.intersects(
-                                                    dx1, 0, dx2 - dx1, 200))) {
-                    
-                        Wolf3DGame.setClosestEnemyInSight(enemyObj);
-                        targetEnemy.setBounds(targetEnemyRegionTmp);
-                    }
+            // draw sprite
+            int dx1 = offsetX + 160 - sizeHor / 2 + sizeVer;
+            int dy1 = offsety - sizeHor / 2;
+            int dx2 = dx1 + sizeHor;
+            int dy2 = dy1 + sizeHor;
+            int sx1 = 0;
+            int sy1 = 0;
+            int sx2 = 64;
+            int sy2 = 64;
+            Shape oc = g.getClip();
+            g.setClip(
+                    startClip, 0, endClip - startClip, CANVAS_HEIGHT - 40);
+
+            g.drawImage(obj2.getSprite()
+                    , dx1, dy1, dx2, dy2, sx1, sy1, sx2, sy2, null);
+
+            g.setClip(oc);
+
+            // reuse this drawing routine 
+            // to choose the closest enemy in sight
+            int terX = offsetX + 160 - sizeHor / 4 + sizeVer;
+            int terY = dy1;
+            int terW = sizeHor / 2;
+            int terH = dy2 - dy1;
+            targetEnemyRegionTmp.setBounds(terX, terY, terW, terH);
+            EnemyObj closestEnemy = Wolf3DGame.getClosestEnemyInSight();
+            if (obj2.getType() == ENEMY) { 
+                Objs.EnemyObj enemyObj = (Objs.EnemyObj) obj2;
+                if (enemyObj.getEnemyState() != DEAD && 
+                    ((closestEnemy == null 
+                        || enemyObj.getDistanceFromPlayer() 
+                        < closestEnemy.getDistanceFromPlayer()) 
+                            && sight.intersects(dx1, 0, dx2 - dx1, 200) 
+                                && targetEnemyRegionTmp.intersects(
+                                                dx1, 0, dx2 - dx1, 200))) {
+
+                    Wolf3DGame.setClosestEnemyInSight(enemyObj);
+                    targetEnemy.setBounds(targetEnemyRegionTmp);
                 }
             }
         }
-    } 
+    }
     
     private final Comparator<Obj> objComparator = (Obj o1, Obj o2) -> { 
         // for sprites that have shadow, give priority to draw first
